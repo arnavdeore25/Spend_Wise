@@ -58,15 +58,28 @@ export function parseNaturalLanguageInput(rawInput) {
   const input = rawInput.trim();
   if (input.length < 2) return null;
 
-  // Extract amount: handles "₹50", "Rs 50", "Rs. 50", "50 rs", "50/-", "50 rupay", "50 inr"
-  const amountMatch =
-    input.match(/(?:₹|rs\.?|inr)?\s*(\d+(?:\.\d{1,2})?)\s*(?:\/-|rs|rupay|rupees|inr)?/i) ||
-    input.match(/(\d+(?:\.\d{1,2})?)/);
+  // Scan every number in the string, noting whether it's tagged with a currency cue.
+  // Prefer a currency-tagged number; otherwise fall back to the LAST number found
+  // (quantities like "2 samosas" typically precede the price, not follow it).
+  const numberPattern = /(₹|rs\.?|inr)?\s*(\d+(?:\.\d{1,2})?)\s*(\/-|rs|rupay|rupees|inr)?/gi;
 
-  let amount = "";
-  if (amountMatch) {
-    amount = amountMatch[1];
+  let match;
+  let currencyTaggedAmount = null;
+  let lastAmount = null;
+
+  while ((match = numberPattern.exec(input)) !== null) {
+    if (match[0] === "") {
+      numberPattern.lastIndex++;
+      continue;
+    }
+    const [, prefix, number, suffix] = match;
+    lastAmount = number;
+    if ((prefix && prefix.trim()) || (suffix && suffix.trim())) {
+      if (!currencyTaggedAmount) currencyTaggedAmount = number;
+    }
   }
+
+  const amount = currencyTaggedAmount || lastAmount || "";
 
   // Detect category based on Indian keywords
   const lower = input.toLowerCase();
@@ -90,10 +103,8 @@ export function parseNaturalLanguageInput(rawInput) {
     .replace(/[/-]/g, " ")
     .trim();
 
-  // Clean up extra whitespaces
   description = description.replace(/\s+/g, " ");
 
-  // If description became empty, default to detected category or input
   if (!description || description.length < 2) {
     description = detectedCategory || input;
   }
