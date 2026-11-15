@@ -53,33 +53,35 @@ const CATEGORY_KEYWORDS = {
   ]
 };
 
+function extractAmount(input) {
+  const numberPattern = /(?:₹|\?|rs\.?|inr|rupees|rupay)?\s*(\d[\d,]*(?:\.\d{1,2})?)\s*(?:\/\-|rs|rupay|rupees|inr)?/gi;
+
+  let currencyTaggedAmount = null;
+  let lastAmount = null;
+
+  for (const match of input.matchAll(numberPattern)) {
+    const rawNumber = match[1];
+    const fullMatch = match[0];
+
+    if (!rawNumber) continue;
+
+    lastAmount = rawNumber.replace(/,/g, "");
+
+    const hasCurrencyTag = /(?:₹|\?|rs\.?|inr|rupees|rupay|\/\-)/i.test(fullMatch);
+    if (hasCurrencyTag && !currencyTaggedAmount) {
+      currencyTaggedAmount = lastAmount;
+    }
+  }
+
+  return currencyTaggedAmount || lastAmount || "";
+}
+
 export function parseNaturalLanguageInput(rawInput) {
   if (!rawInput || typeof rawInput !== "string") return null;
   const input = rawInput.trim();
   if (input.length < 2) return null;
 
-  // Scan every number in the string, noting whether it's tagged with a currency cue.
-  // Prefer a currency-tagged number; otherwise fall back to the LAST number found
-  // (quantities like "2 samosas" typically precede the price, not follow it).
-  const numberPattern = /(₹|rs\.?|inr)?\s*(\d+(?:\.\d{1,2})?)\s*(\/-|rs|rupay|rupees|inr)?/gi;
-
-  let match;
-  let currencyTaggedAmount = null;
-  let lastAmount = null;
-
-  while ((match = numberPattern.exec(input)) !== null) {
-    if (match[0] === "") {
-      numberPattern.lastIndex++;
-      continue;
-    }
-    const [, prefix, number, suffix] = match;
-    lastAmount = number;
-    if ((prefix && prefix.trim()) || (suffix && suffix.trim())) {
-      if (!currencyTaggedAmount) currencyTaggedAmount = number;
-    }
-  }
-
-  const amount = currencyTaggedAmount || lastAmount || "";
+  const amount = extractAmount(input);
 
   // Detect category based on Indian keywords
   const lower = input.toLowerCase();
@@ -97,9 +99,9 @@ export function parseNaturalLanguageInput(rawInput) {
 
   // Clean description by removing currency symbols and numbers
   let description = input
-    .replace(/(?:₹|rs\.?|inr)\s*\d+(?:\.\d{1,2})?/gi, "")
-    .replace(/\d+(?:\.\d{1,2})?\s*(?:\/-|rs|rupay|rupees|inr)/gi, "")
-    .replace(/\b\d+(?:\.\d{1,2})?\b/g, "")
+    .replace(/(?:₹|\?|rs\.?|inr|rupees|rupay)\s*[-:]?\s*\d[\d,]*(?:\.\d{1,2})?/gi, "")
+    .replace(/\d[\d,]*(?:\.\d{1,2})?\s*(?:\/\-|rs|rupay|rupees|inr)/gi, "")
+    .replace(/\b\d[\d,]*(?:\.\d{1,2})?\b/g, "")
     .replace(/[/-]/g, " ")
     .trim();
 
